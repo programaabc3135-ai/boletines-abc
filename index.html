@@ -472,23 +472,23 @@
                 Subir Boletín
             </div>
             
+            <div class="upload-info" style="background: #fff3e0; padding: 15px; border-radius: 10px; margin-bottom: 15px; border-left: 4px solid #FF8C42;">
+                <strong style="color: #333;">📌 Importante:</strong>
+                <ul style="margin: 10px 0 0 20px; color: #666; font-size: 14px;">
+                    <li><strong>Si tenés PDF:</strong> Subí 1 archivo PDF con todas las hojas del boletín</li>
+                    <li><strong>Si tenés fotos:</strong> Subí 2 imágenes (una de PDL y otra de Matemática)</li>
+                </ul>
+            </div>
+            
             <div class="upload-area" id="uploadArea">
                 <div class="upload-icon">📄</div>
                 <div class="upload-text">Click acá o arrastrá el boletín</div>
-                <div class="upload-subtext">Foto o PDF (máx. 10MB)</div>
+                <div class="upload-subtext">1 PDF completo o 2 fotos (PDL + Matemática) | Máx. 10MB c/u</div>
             </div>
             
-            <input type="file" id="fileInput" accept="image/*,.pdf" />
+            <input type="file" id="fileInput" accept="image/*,.pdf" multiple />
             
-            <div class="preview-area" id="previewArea">
-                <div class="preview-item">
-                    <div class="preview-info">
-                        <div class="preview-icon">📎</div>
-                        <div class="preview-name" id="fileName"></div>
-                    </div>
-                    <button class="remove-btn" id="removeBtn">Quitar</button>
-                </div>
-            </div>
+            <div class="preview-area" id="previewArea"></div>
         </div>
         
         <button class="submit-btn" id="submitBtn" disabled>
@@ -502,8 +502,6 @@
         const uploadArea = document.getElementById('uploadArea');
         const fileInput = document.getElementById('fileInput');
         const previewArea = document.getElementById('previewArea');
-        const fileName = document.getElementById('fileName');
-        const removeBtn = document.getElementById('removeBtn');
         const submitBtn = document.getElementById('submitBtn');
         const errorMessage = document.getElementById('errorMessage');
         const bimestreBtns = document.querySelectorAll('.bimestre-btn');
@@ -518,7 +516,7 @@
         const ausentismoDisplay = document.getElementById('ausentismoDisplay');
         const ausentismoValue = document.getElementById('ausentismoValue');
         
-        let selectedFile = null;
+        let selectedFiles = [];
         let selectedBimestre = null;
         
         // Calcular promedio
@@ -583,42 +581,84 @@
             e.preventDefault();
             uploadArea.classList.remove('dragover');
             if (e.dataTransfer.files.length > 0) {
-                handleFile(e.dataTransfer.files[0]);
+                handleFiles(e.dataTransfer.files);
             }
         });
         
         fileInput.addEventListener('change', (e) => {
             if (e.target.files.length > 0) {
-                handleFile(e.target.files[0]);
+                handleFiles(e.target.files);
             }
         });
         
-        function handleFile(file) {
-            if (file.size > 10 * 1024 * 1024) {
-                showError('El archivo es muy grande. Máximo 10MB.');
+        function handleFiles(files) {
+            const fileArray = Array.from(files);
+            
+            // Verificar si hay PDFs
+            const hasPDF = fileArray.some(f => f.type === 'application/pdf');
+            
+            if (hasPDF && fileArray.length > 1) {
+                showError('Si subís un PDF, debe ser solo 1 archivo.');
                 return;
             }
             
-            const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
-            if (!validTypes.includes(file.type)) {
-                showError('Tipo de archivo no válido. Solo imágenes o PDF.');
+            if (!hasPDF && fileArray.length > 2) {
+                showError('Podés subir máximo 2 imágenes.');
                 return;
             }
             
-            selectedFile = file;
-            fileName.textContent = file.name;
-            previewArea.style.display = 'block';
-            uploadArea.style.display = 'none';
+            // Validar cada archivo
+            for (let file of fileArray) {
+                if (file.size > 10 * 1024 * 1024) {
+                    showError(`El archivo ${file.name} es muy grande. Máximo 10MB por archivo.`);
+                    return;
+                }
+                
+                const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
+                if (!validTypes.includes(file.type)) {
+                    showError('Tipo de archivo no válido. Solo imágenes o PDF.');
+                    return;
+                }
+            }
+            
+            selectedFiles = fileArray;
+            showPreviews();
             updateSubmitButton();
         }
         
-        removeBtn.addEventListener('click', () => {
-            selectedFile = null;
-            previewArea.style.display = 'none';
-            uploadArea.style.display = 'block';
-            fileInput.value = '';
+        function showPreviews() {
+            previewArea.innerHTML = '';
+            previewArea.style.display = 'block';
+            uploadArea.style.display = 'none';
+            
+            selectedFiles.forEach((file, index) => {
+                const previewItem = document.createElement('div');
+                previewItem.className = 'preview-item';
+                previewItem.style.marginBottom = '10px';
+                previewItem.innerHTML = `
+                    <div class="preview-info">
+                        <div class="preview-icon">${file.type === 'application/pdf' ? '📄' : '🖼️'}</div>
+                        <div class="preview-name">${file.name}</div>
+                    </div>
+                    <button class="remove-btn" onclick="removeFile(${index})">Quitar</button>
+                `;
+                previewArea.appendChild(previewItem);
+            });
+        }
+        
+        window.removeFile = function(index) {
+            selectedFiles.splice(index, 1);
+            if (selectedFiles.length === 0) {
+                selectedFiles = [];
+                previewArea.style.display = 'none';
+                previewArea.innerHTML = '';
+                uploadArea.style.display = 'block';
+                fileInput.value = '';
+            } else {
+                showPreviews();
+            }
             updateSubmitButton();
-        });
+        }
         
         function updateSubmitButton() {
             const studentName = studentNameInput.value.trim();
@@ -629,7 +669,7 @@
             const ausentes = parseInt(ausentesInput.value);
             
             submitBtn.disabled = !(
-                selectedFile && 
+                selectedFiles.length > 0 && 
                 selectedBimestre && 
                 studentName && 
                 ciclo &&
@@ -665,11 +705,31 @@
             errorMessage.style.display = 'none';
             
             try {
-                const reader = new FileReader();
-                reader.onload = async (e) => {
-                    try {
-                        const fileData = e.target.result;
+                const filesData = [];
+                let filesProcessed = 0;
+                
+                // Procesar todos los archivos
+                selectedFiles.forEach((file, index) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        filesData.push({
+                            fileName: file.name,
+                            fileData: e.target.result,
+                            mimeType: file.type
+                        });
                         
+                        filesProcessed++;
+                        
+                        // Cuando todos los archivos estén listos, enviar
+                        if (filesProcessed === selectedFiles.length) {
+                            sendData(filesData);
+                        }
+                    };
+                    reader.readAsDataURL(file);
+                });
+                
+                async function sendData(filesData) {
+                    try {
                         const payload = {
                             studentName: studentName,
                             ciclo: ciclo,
@@ -678,9 +738,7 @@
                             notaMatematica: mat,
                             presentes: presentes,
                             ausentes: ausentes,
-                            fileName: selectedFile.name,
-                            fileData: fileData,
-                            mimeType: selectedFile.type
+                            files: filesData
                         };
                         
                         await fetch(SCRIPT_URL, {
@@ -705,6 +763,7 @@
                                         <p style="margin: 10px 0;"><strong>Estudiante:</strong> ${studentName}</p>
                                         <p style="margin: 10px 0;"><strong>Ciclo:</strong> ${ciclo}</p>
                                         <p style="margin: 10px 0;"><strong>Bimestre:</strong> ${selectedBimestre}°</p>
+                                        <p style="margin: 10px 0;"><strong>Archivos:</strong> ${filesData.length} archivo(s)</p>
                                         <p style="margin: 10px 0;"><strong>PDL:</strong> ${pdl} | <strong>Matemática:</strong> ${mat}</p>
                                         <p style="margin: 10px 0;"><strong>Promedio:</strong> ${promedio.toFixed(2)}</p>
                                         <p style="margin: 10px 0;"><strong>Asistencia:</strong> ${presentes} presentes, ${ausentes} ausentes (${ausentismo.toFixed(1)}% ausentismo)</p>
@@ -721,19 +780,11 @@
                         }, 2000);
                         
                     } catch (error) {
-                        showError('Error al subir el archivo. Intentá de nuevo.');
+                        showError('Error al subir los archivos. Intentá de nuevo.');
                         submitBtn.disabled = false;
                         submitBtn.textContent = '📤 Enviar Boletín';
                     }
-                };
-                
-                reader.onerror = () => {
-                    showError('Error al leer el archivo.');
-                    submitBtn.disabled = false;
-                    submitBtn.textContent = '📤 Enviar Boletín';
-                };
-                
-                reader.readAsDataURL(selectedFile);
+                }
                 
             } catch (error) {
                 showError('Error al procesar la solicitud.');
